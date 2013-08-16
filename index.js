@@ -48,7 +48,7 @@ Ramrod.prototype.add = function(route, name, callback) {
 
   this.routeObjects[name] = [];
 
-  for (var i in name.match(namedParam)) {
+  for ( var i in name.match(namedParam) ) {
     this.routeObjects[name].push(name.match(namedParam)[i].split(':')[1]);
   }
 
@@ -102,10 +102,10 @@ Ramrod.prototype.dispatch = function(req, res) {
 
       var output = {};
 
-      output.params = {};
+      output.path = {};
 
-      for (var i in params) {
-        output.params[this.routeObjects[path][i]] = params[i]
+      for ( var i in params ) {
+        output.path[this.routeObjects[path][i]] = params[i]
       }
 
       if (url.query) {
