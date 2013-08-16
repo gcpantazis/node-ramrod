@@ -3,28 +3,28 @@ var util = require('util');
 var parseUrl = require('url').parse;
 var parseQuerystring = require('querystring').parse;
 
-var namedParam    = /:\w+/g;
-var splatParam    = /\*\w+/g;
-var escapeRegExp  = /[-[\]{}()+?.,\\^$|#\s]/g;
-var namespaced    = /^[\w\/:]+\|(\w+)$/;
+var namedParam = /:\w+/g;
+var splatParam = /\*\w+/g;
+var escapeRegExp = /[-[\]{}()+?.,\\^$|#\s]/g;
+var namespaced = /^[\w\/:]+\|(\w+)$/;
 
-function Ramrod( routes ){
+function Ramrod(routes) {
   this.routes = {};
+  this.routeObjects = {};
 
-  if( routes ){
-    for(var path in routes ){
-      if( routes.hasOwnProperty( path ) ){
+  if (routes) {
+    for (var path in routes) {
+      if (routes.hasOwnProperty(path)) {
 
-        if( util.isRegExp( routes[path] ) ){
+        if (util.isRegExp(routes[path])) {
           this.routes[path] = routes[path];
 
-        } else if( typeof routes[path] == "function" ){
-          this.add( path, routes[path] );
+        } else if (typeof routes[path] == "function") {
+          this.add(path, routes[path]);
 
         } else {
-          this.add( path );
+          this.add(path);
         }
-
       }
     }
   }
@@ -32,78 +32,94 @@ function Ramrod( routes ){
 
 util.inherits(Ramrod, EventEmitter);
 
-Ramrod.prototype.add = function( route, name, callback ){
-  if( !callback && typeof name == "function") {
+Ramrod.prototype.add = function(route, name, callback) {
+  if (!callback && typeof name == "function") {
     callback = name;
   }
-  if( !name || typeof name == "function" ) {
+  if (!name || typeof name == "function") {
     name = route;
   }
-  if( !util.isRegExp(route) ){
-    route = this._routeToRegExp( route );
+  if (!util.isRegExp(route)) {
+    route = this._routeToRegExp(route);
   }
-  if( callback ){
+  if (callback) {
     this.on(name, callback);
   }
+
+  this.routeObjects[name] = [];
+
+  for (var i in name.match(namedParam)) {
+    this.routeObjects[name].push(name.match(namedParam)[i].split(':')[1]);
+  }
+
   this.routes[name] = route;
 };
 
-['get','post','put','del','options'].forEach(function(method){
-  var methodName = method === 'del' ? 'delete': method;
+['get', 'post', 'put', 'del', 'options'].forEach(function(method) {
+  var methodName = method === 'del' ? 'delete' : method;
 
-  Ramrod.prototype[method] = function( route, name, callback ){
-    if( !callback && typeof name == "function") {
+  Ramrod.prototype[method] = function(route, name, callback) {
+    if (!callback && typeof name == "function") {
       callback = name;
     }
-    if( !name || typeof name == "function" ) {
+    if (!name || typeof name == "function") {
       name = route;
     }
-    if( !util.isRegExp(route) ){
-      route = this._routeToRegExp( route );
+    if (!util.isRegExp(route)) {
+      route = this._routeToRegExp(route);
     }
-    if( callback ){
-      this.on( name +'|'+ methodName, callback);
+    if (callback) {
+      this.on(name + '|' + methodName, callback);
     }
-    this.routes[name +'|'+ methodName] = route;
+    this.routes[name + '|' + methodName] = route;
   };
 });
 
 Ramrod.prototype._routeToRegExp = function(route) {
+
   route = route.replace(escapeRegExp, '\\$&')
-               .replace(namedParam, '([^\/]+)')
-               .replace(splatParam, '(.*?)');
+    .replace(namedParam, '([^\/]+)')
+
   return new RegExp('^\/' + route + '$');
 };
 
-function next(){}
+function next() {}
 
-Ramrod.prototype.dispatch = function( req, res ){
+Ramrod.prototype.dispatch = function(req, res) {
   var params, routeMethod;
   var url = parseUrl(req.url);
   var method = req.method && req.method.toLowerCase();
 
   this.emit('before', req, res, next);
 
-  for(var path in this.routes){
-    if( (params = this.routes[path].exec( url.pathname )) ){
-      var args = [ path, req, res ];
-
-      if( params.length >= 1 ){
-        args = args.concat( params.slice(1) );
-      }
-
-      if( url.query ){
-        args.push( parseQuerystring( url.query ) );
-      }
+  for (var path in this.routes) {
+    if ((params = this.routes[path].exec(url.pathname))) {
+      var args = [path, req, res];
 
       routeMethod = namespaced.exec(path);
 
-      if( routeMethod && routeMethod[1] ){
-        if( routeMethod[1] === method ){
+      params = params.slice(1);
+
+      var output = {};
+
+      output.params = {};
+
+      for (var i in params) {
+        output.params[this.routeObjects[path][i]] = params[i]
+      }
+
+      if (url.query) {
+        output.query = parseQuerystring(url.query);
+      }
+
+      args = args.concat(output);
+
+      if (routeMethod && routeMethod[1]) {
+        if (routeMethod[1] === method) {
           return this.emit.apply(this, args);
         }
       } else {
-        return this.emit.apply(this, args );
+        return this.emit.apply(this, args);
       }
 
     }
@@ -112,8 +128,8 @@ Ramrod.prototype.dispatch = function( req, res ){
   this.emit('*', req, res, next);
 };
 
-module.exports = function( routes ){
-  return new Ramrod( routes );
+module.exports = function(routes) {
+  return new Ramrod(routes);
 };
 
 module.exports.Ramrod = Ramrod;
